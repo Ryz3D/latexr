@@ -10,13 +10,13 @@ import { Close, CopyAll, Delete, Download, Help, Image, Restore } from '@mui/ico
 import Latex from 'react-latex';
 import html2canvas from 'html2canvas';
 import { HotKeys } from 'react-hotkeys';
-import { isMobile, isChromium, isChrome, isEdgeChromium, isEdge, isFirefox, isIE, isOpera, isSafari } from 'react-device-detect';
 
 function App() {
   const printRef = useRef();
   const downloadRef = useRef();
 
   const [text, setText] = useState('');
+  const [error, setError] = useState('');
   const [mathMode, setMathMode] = useState(true);
   const [imgScale, setImgScale] = useState(parseFloat(localStorage.getItem('imgScale') || undefined) || 3);
   const [bgColor, setBgColor] = useState('#ffffff00');
@@ -71,9 +71,7 @@ function App() {
     name = name.replaceAll(/\s+/g, ' ');
     return name.slice(0, 25).trim();
   };
-
   const textEmpty = () => text.trim().length === 0;
-
   const saveFormula = () => {
     if (!textEmpty() && !history.some(p => p.text === text)) {
       setHistory([{
@@ -83,7 +81,6 @@ function App() {
       }, ...history]);
     }
   };
-
   const getImg = () => {
     return new Promise(resolve => {
       html2canvas(printRef.current, {
@@ -96,7 +93,6 @@ function App() {
       });
     });
   };
-
   const imgCopy = () => {
     getImg().then(blob => {
       navigator.clipboard.write([
@@ -108,7 +104,6 @@ function App() {
     saveFormula();
     setCopyBarOpen(true);
   };
-
   const imgDownload = () => {
     getImg().then(blob => {
       setDownloadURL(URL.createObjectURL(blob));
@@ -116,18 +111,22 @@ function App() {
     saveFormula();
     setDownloadBarOpen(true);
   };
-
   const openHistory = () => {
     saveFormula();
     setHistoryOpen(true);
   };
-
   const openImage = () => {
     saveFormula();
     getImg().then(blob => {
       setImageURL(URL.createObjectURL(blob));
     });
     setImageOpen(true);
+  };
+  const handleError = (errCode, errText) => {
+    if (errCode !== 'newLineInDisplayMode') {
+      console.log(errCode);
+      setError(errText);
+    }
   };
 
   const shareURL = `https://latexr.web.app/?f=${encodeURIComponent(text)}`;
@@ -155,23 +154,6 @@ function App() {
     VIEW: () => { if (canDownload) openImage(); },
   };
 
-  var devConsoleShortcut = 'Ctrl+Shift+J';
-  if (isChromium || isChrome || isEdgeChromium) {
-    devConsoleShortcut = 'Ctrl+Shift+J';
-  }
-  else if (isSafari) {
-    devConsoleShortcut = 'Option+⌘+C';
-  }
-  else if (isFirefox) {
-    devConsoleShortcut = 'Ctrl+Shift+J';
-  }
-  else if (isOpera) {
-    devConsoleShortcut = 'Ctrl+Shift+I';
-  }
-  else if (isIE || isEdge) {
-    devConsoleShortcut = '';
-  }
-
   return (
     <HotKeys keyMap={keyMap} handlers={keyHandlers}>
       <div style={{
@@ -186,7 +168,7 @@ function App() {
           <Card>
             <Box margin='5vw'>
               <TextField fullWidth label='LaTeX Input' value={text}
-                multiline onChange={(e) => setText(e.target.value)} />
+                multiline onChange={(e) => { setText(e.target.value); setError(''); }} />
               <div style={{ height: '10px' }} />
 
               <Divider />
@@ -204,10 +186,14 @@ function App() {
                   display: 'inline-flex',
                   fontSize: '1.5rem',
                 }}>
-                  <Latex>
+                  <Latex trust={true} displayMode={true}
+                    strict={handleError} throwOnError={false}>
                     {(mathMode ? '$' : '') + text + (mathMode ? '$' : '')}
                   </Latex>
                 </div>
+              </div>
+              <div style={{ color: '#f00' }}>
+                {error}
               </div>
               <div style={{ height: '10px' }} />
 
@@ -261,9 +247,9 @@ function App() {
               </div>
               <div style={{ height: formMargin }} />
 
-              <div style={{ display: 'flex' }}>
-                <Typography>
-                  Image Format
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Typography marginRight='10px'>
+                  Format
                 </Typography>
                 <Select fullWidth value={imgType}
                   onChange={(e) => setImgType(e.target.value)}>
@@ -301,8 +287,12 @@ function App() {
                 {history.map((e, i) =>
                   <ListItemButton key={i} style={{ display: 'flex', justifyContent: 'space-between' }}
                     onClick={() => { setText(e.text); setMathMode(e.mathMode); setHistoryOpen(false); }}>
-                    <div style={{ width: '80%', overflow: 'hidden' }}>
-                      <Latex>
+                    <div style={{
+                      width: '80%',
+                      overflow: 'hidden',
+                    }}>
+                      <Latex trust={true} displayMode={true}
+                        strict={() => { }} throwOnError={false}>
                         {(e.mathMode ? '$' : '') + e.text + (e.mathMode ? '$' : '')}
                       </Latex>
                     </div>
@@ -330,7 +320,12 @@ function App() {
         <Box margin='10vw'>
           <Card>
             <Box padding='5vw'>
-              <img src={imageURL} alt='' style={{ width: '100%' }} />
+              <img src={imageURL} alt='' style={{
+                width: '100%',
+                maxWidth: '400px',
+                display: 'block',
+                margin: 'auto',
+              }} />
               <Divider />
               <div style={{ height: '10px' }} />
               <Button fullWidth variant='contained' startIcon={<Close />} onClick={() => setImageOpen(false)}>
@@ -350,10 +345,6 @@ function App() {
               <Divider />
               <div style={{ height: '10px' }} />
               <Typography variant='body'>
-                {!isMobile && <>LaTeX errors: See developer console ({devConsoleShortcut})</>}
-                <div style={{ height: '10px' }} />
-                <Divider />
-                <div style={{ height: '10px' }} />
                 Shortcuts (Input field must not be focused):
                 <br />
                 H: History
